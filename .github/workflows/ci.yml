@@ -1,0 +1,28 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      # Every routine is checked against the gonum routine it replaces, so a
+      # wrong fast path fails here rather than in someone's numerical code.
+      - run: go test ./...
+      # The overrides run concurrently for large matrices.
+      - run: go test -race ./...
+      # A guard that rejected everything would leave the differential tests
+      # passing against gonum's own answers. TestFastPathActuallyRuns is what
+      # notices, and it only means anything with the accelerated path selected.
+      - run: go run github.com/sebishogun/simd/cmd/simdinfo
