@@ -1,0 +1,15 @@
+blank_issues_enabled: true
+
+contact_links:
+  - name: A routine returns the wrong answer
+    url: https://github.com/sebishogun/simdblas/blob/main/docs/guide.md
+    about: Try blas64.Use(gonum.Implementation{}) first. If the problem survives that, it is not this package. If it disappears, open an issue with the routine, the argument shapes and the sizes — the guards are shape-dependent.
+  - name: Results differ from gonum in the last decimal
+    url: https://github.com/sebishogun/simdblas/blob/main/docs/guide.md
+    about: Expected. BLAS does not specify bit-exact results and no two implementations agree. The guide explains what is guaranteed instead.
+  - name: A benchmark says this is slower
+    url: https://github.com/sebishogun/simdblas/blob/main/CONTRIBUTING.md
+    about: Worth reporting, with the routine and size. Every routine has a measured minimum length below which it delegates, and those were measured on one machine.
+  - name: How to use it
+    url: https://github.com/sebishogun/simdblas/blob/main/docs/guide.md
+    about: Installing the backend, what gets faster, how to measure it yourself.

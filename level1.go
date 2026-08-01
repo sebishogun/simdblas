@@ -16,6 +16,38 @@ import (
 // has to reproduce someone else's panic text is a fast path that will get it
 // wrong eventually.
 
+// Minimum lengths, below which gonum's own routine is faster and gets the call.
+//
+// This is the one place a fast path can lose without any guard noticing. The
+// kernels behind these have their own threshold — under a few dozen elements
+// they run a plain Go loop, because crossing into assembly costs more than it
+// saves — but gonum's Level 1 is *hand-written SSE2*, not a Go loop, so falling
+// back to portable code hands it the win. Delegating instead is strictly
+// better: same answer, and gonum's assembly rather than a scalar loop.
+//
+// Measured on Zen 5, float64, gonum against this, ratios crossing 1.0:
+//
+//	n      asum   axpy    dot   nrm2   scal
+//	8      0.52   0.62   0.46   1.09   0.55
+//	16     1.04   0.72   0.57   2.15   0.59
+//	32     1.75   0.97   0.77   3.70   0.98
+//	48     2.57   1.10   0.94   5.16   1.06
+//	64     3.62   1.29   1.15   6.47   1.07
+//	256   14.03   2.42   2.26  18.75   1.79
+//
+// Each threshold is the first length that is clearly ahead, not the break-even
+// point: being wrong here costs speed in one direction and a regression in the
+// other, and a regression is what a caller notices.
+const (
+	minLenDot  = 64
+	minLenAxpy = 48
+	minLenScal = 48
+	minLenAsum = 16
+	minLenNrm2 = 8
+	minLenSwap = 48
+	minLenRot  = 48
+)
+
 // unit reports whether a one-vector Level 1 call is the contiguous, valid case.
 func unit[T simd.Number](n int, x []T, incX int) bool {
 	return incX == 1 && n >= 0 && len(x) >= n
@@ -27,14 +59,14 @@ func unit2[T simd.Number](n int, x []T, incX int, y []T, incY int) bool {
 }
 
 func (impl Implementation) Ddot(n int, x []float64, incX int, y []float64, incY int) float64 {
-	if !unit2(n, x, incX, y, incY) {
+	if !unit2(n, x, incX, y, incY) || n < minLenDot {
 		return impl.Implementation.Ddot(n, x, incX, y, incY)
 	}
 	return simd.Dot(x[:n], y[:n])
 }
 
 func (impl Implementation) Sdot(n int, x []float32, incX int, y []float32, incY int) float32 {
-	if !unit2(n, x, incX, y, incY) {
+	if !unit2(n, x, incX, y, incY) || n < minLenDot {
 		return impl.Implementation.Sdot(n, x, incX, y, incY)
 	}
 	return simd.Dot(x[:n], y[:n])
@@ -59,7 +91,7 @@ func (impl Implementation) Sdot(n int, x []float32, incX int, y []float32, incY 
 //
 // The common path pays one comparison.
 func (impl Implementation) Dnrm2(n int, x []float64, incX int) float64 {
-	if !unit(n, x, incX) {
+	if !unit(n, x, incX) || n < minLenNrm2 {
 		return impl.Implementation.Dnrm2(n, x, incX)
 	}
 	if n == 0 {
@@ -79,7 +111,7 @@ func (impl Implementation) Dnrm2(n int, x []float64, incX int) float64 {
 }
 
 func (impl Implementation) Snrm2(n int, x []float32, incX int) float32 {
-	if !unit(n, x, incX) {
+	if !unit(n, x, incX) || n < minLenNrm2 {
 		return impl.Implementation.Snrm2(n, x, incX)
 	}
 	if n == 0 {
@@ -101,14 +133,14 @@ const (
 )
 
 func (impl Implementation) Dasum(n int, x []float64, incX int) float64 {
-	if !unit(n, x, incX) {
+	if !unit(n, x, incX) || n < minLenAsum {
 		return impl.Implementation.Dasum(n, x, incX)
 	}
 	return simd.L1Norm(x[:n])
 }
 
 func (impl Implementation) Sasum(n int, x []float32, incX int) float32 {
-	if !unit(n, x, incX) {
+	if !unit(n, x, incX) || n < minLenAsum {
 		return impl.Implementation.Sasum(n, x, incX)
 	}
 	return simd.L1Norm(x[:n])
@@ -117,7 +149,7 @@ func (impl Implementation) Sasum(n int, x []float32, incX int) float32 {
 // Daxpy is y += alpha*x, the operation BLAS calls axpy and this library calls
 // AddScaled. One pass over both slices rather than a scale followed by an add.
 func (impl Implementation) Daxpy(n int, alpha float64, x []float64, incX int, y []float64, incY int) {
-	if !unit2(n, x, incX, y, incY) {
+	if !unit2(n, x, incX, y, incY) || n < minLenAxpy {
 		impl.Implementation.Daxpy(n, alpha, x, incX, y, incY)
 		return
 	}
@@ -125,7 +157,7 @@ func (impl Implementation) Daxpy(n int, alpha float64, x []float64, incX int, y 
 }
 
 func (impl Implementation) Saxpy(n int, alpha float32, x []float32, incX int, y []float32, incY int) {
-	if !unit2(n, x, incX, y, incY) {
+	if !unit2(n, x, incX, y, incY) || n < minLenAxpy {
 		impl.Implementation.Saxpy(n, alpha, x, incX, y, incY)
 		return
 	}
@@ -133,7 +165,7 @@ func (impl Implementation) Saxpy(n int, alpha float32, x []float32, incX int, y 
 }
 
 func (impl Implementation) Dscal(n int, alpha float64, x []float64, incX int) {
-	if !unit(n, x, incX) {
+	if !unit(n, x, incX) || n < minLenScal {
 		impl.Implementation.Dscal(n, alpha, x, incX)
 		return
 	}
@@ -141,7 +173,7 @@ func (impl Implementation) Dscal(n int, alpha float64, x []float64, incX int) {
 }
 
 func (impl Implementation) Sscal(n int, alpha float32, x []float32, incX int) {
-	if !unit(n, x, incX) {
+	if !unit(n, x, incX) || n < minLenScal {
 		impl.Implementation.Sscal(n, alpha, x, incX)
 		return
 	}

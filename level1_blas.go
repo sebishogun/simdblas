@@ -7,7 +7,7 @@ import "github.com/sebishogun/simd"
 // so accelerating gemm alone left mat.Solve and mat.Inverse untouched.
 
 func (impl Implementation) Dswap(n int, x []float64, incX int, y []float64, incY int) {
-	if !unit2(n, x, incX, y, incY) {
+	if !unit2(n, x, incX, y, incY) || n < minLenSwap {
 		impl.Implementation.Dswap(n, x, incX, y, incY)
 		return
 	}
@@ -15,7 +15,7 @@ func (impl Implementation) Dswap(n int, x []float64, incX int, y []float64, incY
 }
 
 func (impl Implementation) Sswap(n int, x []float32, incX int, y []float32, incY int) {
-	if !unit2(n, x, incX, y, incY) {
+	if !unit2(n, x, incX, y, incY) || n < minLenSwap {
 		impl.Implementation.Sswap(n, x, incX, y, incY)
 		return
 	}
@@ -23,7 +23,7 @@ func (impl Implementation) Sswap(n int, x []float32, incX int, y []float32, incY
 }
 
 func (impl Implementation) Drot(n int, x []float64, incX int, y []float64, incY int, c, s float64) {
-	if !unit2(n, x, incX, y, incY) {
+	if !unit2(n, x, incX, y, incY) || n < minLenRot {
 		impl.Implementation.Drot(n, x, incX, y, incY, c, s)
 		return
 	}
@@ -31,7 +31,7 @@ func (impl Implementation) Drot(n int, x []float64, incX int, y []float64, incY 
 }
 
 func (impl Implementation) Srot(n int, x []float32, incX int, y []float32, incY int, c, s float32) {
-	if !unit2(n, x, incX, y, incY) {
+	if !unit2(n, x, incX, y, incY) || n < minLenRot {
 		impl.Implementation.Srot(n, x, incX, y, incY, c, s)
 		return
 	}

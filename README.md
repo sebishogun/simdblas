@@ -84,6 +84,46 @@ shape `mat.Mul` produces for dense matrices that are not views, which is the
 common call. Widening it is worth doing against measurements rather than in
 advance.
 
+## When it hands the call back to gonum
+
+This is the part that decides whether swapping the backend can ever make your
+program slower. Three things route a call to gonum's own implementation, and
+between them they are meant to cover every case where this is not ahead.
+
+**The shape is wrong for the fast path.** Non-unit strides, and for the matrix
+routines a transpose, an alpha other than 1 or a beta other than 0 outside the
+general path. Invalid arguments go the same way, so the panics your code relies
+on come from gonum and read exactly as they always have.
+
+**The problem is too small.** The kernels have their own threshold — under a
+few dozen elements they run a plain Go loop, because crossing into assembly
+costs more than it saves. That is the right fallback inside a general-purpose
+library and the wrong one here, because gonum's Level 1 is *hand-written SSE2*
+rather than a Go loop. Falling back to portable code would hand gonum the win at
+small sizes, so instead the call is delegated. Measured, gonum against this,
+before the thresholds existed:
+
+| n | asum | axpy | dot | nrm2 | scal |
+|---|---|---|---|---|---|
+| 8 | 0.52× | 0.62× | 0.46× | 1.09× | 0.55× |
+| 16 | 1.04× | 0.72× | 0.57× | 2.15× | 0.59× |
+| 32 | 1.75× | 0.97× | 0.77× | 3.70× | 0.98× |
+| 64 | 3.62× | 1.29× | 1.15× | 6.47× | 1.07× |
+| 256 | 14.03× | 2.42× | 2.26× | 18.75× | 1.79× |
+
+So each routine has a minimum length, set at the first size that is clearly
+ahead rather than at break-even: **dot 64, axpy 48, scal 48, swap 48, rot 48,
+asum 16, nrm2 8**. `gemm` and `trsm` have work thresholds instead, and `ger`
+has one on row length, for the same reason and measured the same way.
+
+**The answer would be wrong.** `nrm2` is the only case: BLAS defines it to avoid
+spurious overflow, so when the sum of squares overflows or sinks into the
+subnormals the call goes to gonum's scaled algorithm. See below.
+
+**What delegation costs.** One extra method call — measured at **+0.4 to +0.7
+ns** on a 3–6 ns operation. That is the floor on how much slower this can be
+than gonum for any call, and it only applies below the thresholds.
+
 ## Results differ from gonum's, and that is the point
 
 BLAS does not specify bit-exact results and no two implementations agree.
@@ -192,6 +232,17 @@ handed to gemm whole. That is what took QR from 1.05× to 1.98× at n=256.
 
 Still on gonum's code: `symm`, `syr2k`, the banded and packed storage variants,
 the triangular Level 2 routines, and everything complex.
+
+## Documentation
+
+- **[docs/guide.md](docs/guide.md)** — installing it, what gets faster and what
+  does not, how to measure it on your own machine, and what to do when
+  something looks wrong.
+- **[Runnable examples](https://pkg.go.dev/github.com/sebishogun/simdblas#pkg-examples)**
+  — every entry point, compiled and checked by `go test`.
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — the bar for a change, and how to add
+  an accelerated routine.
+- **[CHANGELOG.md](CHANGELOG.md)**.
 
 ## Status
 
