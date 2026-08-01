@@ -151,8 +151,14 @@ func TestGemmMatchesGonum(t *testing.T) {
 							simdImpl.Dgemm(tA, blas.NoTrans, m, n, k, alpha, a, lda, b, n, beta, c1, n)
 							refImpl.Dgemm(tA, blas.NoTrans, m, n, k, alpha, a, lda, b, n, beta, c2, n)
 
-							fast := tA == blas.NoTrans && alpha == 1 && beta == 0
-							closeSlice(t, "Dgemm", c1, c2, !fast)
+							// Accelerated whenever the shape is valid and the
+							// work is worth packing for — which since the
+							// general path exists is nearly everything, so
+							// exactness is only required below the
+							// threshold, where this still delegates.
+							accel := int64(m)*int64(n)*int64(k) >= gemmGeneralMinWork &&
+								gemmValid(tA, blas.NoTrans, m, n, k, lda, n, n, len(a), len(b), len(c1))
+							closeSlice(t, "Dgemm", c1, c2, !accel)
 						}
 					}
 				}

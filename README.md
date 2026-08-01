@@ -65,7 +65,7 @@ The routines where whole-slice vector work pays, in both precisions:
 
 - **Level 1** — `dot`, `nrm2`, `asum`, `axpy`, `scal`, `swap`, `rot`
 - **Level 2** — `gemv`, `ger`
-- **Level 3** — `gemm`
+- **Level 3** — `gemm`, `trsm`, `trmm`, `syrk`
 
 Everything else is inherited from `gonum.Implementation` and behaves exactly as
 it did. That is the whole design: `simdblas.Implementation` *embeds* gonum's,
@@ -155,27 +155,43 @@ threads and reported `Dgemm` at 512 as 2.27× instead of 4.81×.
 go test -run '^$' -bench . -count 6 .
 ```
 
-## What this does not accelerate: decompositions
+## Decompositions
 
-`mat.Mul` is 4.25× faster. `mat.LU`, `mat.Solve`, `mat.Inverse` and `mat.Det`
-are **unchanged**, and that was measured rather than assumed.
+`mat.LU`, `mat.QR`, `mat.Cholesky` and `mat.Inverse` all run faster. Same
+method as the table above — worse of two runs, minimum of four counts:
 
-LAPACK works on submatrix windows with a scaling factor throughout. Its blocked
-`Dgetrf` calls `Dgemm` with an alpha of −1 and a leading dimension that is the
-parent matrix's width; `Dgetf2` calls `Dger` with a strided column as x; and
-`Dtrsm`, the other half of the blocked step, has no fast path here at all. Every
-guard below rejects those shapes, so a factorisation runs entirely on gonum's
-own code.
+| | gonum | simdblas | |
+|---|---|---|---|
+| `QR` n=256 | 2.20 ms | 1.11 ms | **1.98×** |
+| `Inverse` n=512 | 19.3 ms | 12.5 ms | **1.54×** |
+| `Cholesky` n=256 | 738 µs | 490 µs | **1.51×** |
+| `Inverse` n=256 | 2.92 ms | 2.08 ms | **1.40×** |
+| `Cholesky` n=512 | 7.97 ms | 5.98 ms | **1.33×** |
+| `LU` n=256 | 945 µs | 758 µs | **1.25×** |
+| `LU` n=512 | 7.35 ms | 6.00 ms | **1.22×** |
+| `QR` n=512 | 14.3 ms | 12.6 ms | **1.14×** |
 
-That is a real limit rather than a subtlety: the fast paths are shaped for
-application code, where matrices are dense and unscaled, and a decomposition is
-almost the opposite. Fixing it means accepting a leading dimension and a general
-alpha and beta in the `gemm` path, and writing `trsm`. Both are tractable and
-neither is done.
+These were flat at 1.00× until v0.3.0, and the reason is worth stating because
+it is not obvious. LAPACK almost never calls BLAS in the shape application code
+does: `Dgetrf` multiplies *submatrix windows* with an alpha of −1, `Dgetf2`
+passes `ger` a strided column, and half the work is in `trsm` and `trmm`, which
+had no fast path at all. Every guard rejected every call.
 
-The rank-1 update, rotation and swap kernels added in simd.go v1.2.0 are fast
-on their own — 8.2×, 13.3× and 4.4× over portable Go — and reachable through
-`Dger`, `Drot` and `Dswap` when the arguments are contiguous.
+So the gemm path now packs windowed, transposed and scaled operands into
+contiguous scratch and multiplies there — three copies that are O(mk+kn+mn)
+against O(mnk) of arithmetic, which is 2.5% of the multiply at LAPACK's own
+blocking. `trsm`, `trmm` and `syrk` are blocked on top of it: gonum solves the
+small diagonal blocks and the accelerated gemm does the rectangular updates
+between them.
+
+`trmm` needed one more case. LAPACK's `Dlarfb` applies a block reflector
+through a triangle that is exactly the block size — 64 across — against a B as
+tall as the matrix, and blocking a 64-wide triangle produces one block and no
+gemm. Below the block size the triangle is filled out into a full matrix and
+handed to gemm whole. That is what took QR from 1.05× to 1.98× at n=256.
+
+Still on gonum's code: `symm`, `syr2k`, the banded and packed storage variants,
+the triangular Level 2 routines, and everything complex.
 
 ## Status
 

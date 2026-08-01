@@ -45,21 +45,31 @@ func gemmFast(tA, tB blas.Transpose, m, n, k int, alphaIs1, betaIs0 bool, lda, l
 }
 
 func (impl Implementation) Dgemm(tA, tB blas.Transpose, m, n, k int, alpha float64, a []float64, lda int, b []float64, ldb int, beta float64, c []float64, ldc int) {
-	if !gemmFast(tA, tB, m, n, k, alpha == 1, beta == 0, lda, ldb, ldc) ||
-		len(a) < m*k || len(b) < k*n || len(c) < m*n {
-		impl.Implementation.Dgemm(tA, tB, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc)
+	if gemmFast(tA, tB, m, n, k, alpha == 1, beta == 0, lda, ldb, ldc) &&
+		len(a) >= m*k && len(b) >= k*n && len(c) >= m*n {
+		simd.MatMulParallelInto(c[:m*n], a[:m*k], b[:k*n], m, k, n)
 		return
 	}
-	simd.MatMulParallelInto(c[:m*n], a[:m*k], b[:k*n], m, k, n)
+	if int64(m)*int64(n)*int64(k) >= gemmGeneralMinWork &&
+		gemmValid(tA, tB, m, n, k, lda, ldb, ldc, len(a), len(b), len(c)) {
+		gemmGeneral(tA, tB, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc)
+		return
+	}
+	impl.Implementation.Dgemm(tA, tB, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc)
 }
 
 func (impl Implementation) Sgemm(tA, tB blas.Transpose, m, n, k int, alpha float32, a []float32, lda int, b []float32, ldb int, beta float32, c []float32, ldc int) {
-	if !gemmFast(tA, tB, m, n, k, alpha == 1, beta == 0, lda, ldb, ldc) ||
-		len(a) < m*k || len(b) < k*n || len(c) < m*n {
-		impl.Implementation.Sgemm(tA, tB, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc)
+	if gemmFast(tA, tB, m, n, k, alpha == 1, beta == 0, lda, ldb, ldc) &&
+		len(a) >= m*k && len(b) >= k*n && len(c) >= m*n {
+		simd.MatMulParallelInto(c[:m*n], a[:m*k], b[:k*n], m, k, n)
 		return
 	}
-	simd.MatMulParallelInto(c[:m*n], a[:m*k], b[:k*n], m, k, n)
+	if int64(m)*int64(n)*int64(k) >= gemmGeneralMinWork &&
+		gemmValid(tA, tB, m, n, k, lda, ldb, ldc, len(a), len(b), len(c)) {
+		gemmGeneral(tA, tB, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc)
+		return
+	}
+	impl.Implementation.Sgemm(tA, tB, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc)
 }
 
 // gemvFast is the same question for the matrix-vector routines. y = A*x with
