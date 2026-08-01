@@ -305,6 +305,20 @@ one Zen 5 machine, and the thresholds are measured constants. Reports from other
 architectures are the contribution it most needs — see
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
+
+## The rest of the family
+
+All built on [simd.go](https://github.com/sebishogun/simd), which generates its
+kernels once from C and ships them as committed assembly for nine instruction
+sets — so none of these needs cgo, and none is amd64-only.
+
+| | |
+|---|---|
+| [**simd.go**](https://github.com/sebishogun/simd) | 463 operations over slices, bytes and text. The kernels everything else is built from. |
+| [**simdjson**](https://github.com/sebishogun/simdjson) | Structural-index JSON parsing. Faster than minio/simdjson-go, and not amd64-only. |
+| [**simdcsv**](https://github.com/sebishogun/simdcsv) | CSV reading on one vector scan per record. |
+| [**simdvec**](https://github.com/sebishogun/simdvec) | Embedding search whose whole index scan is one matrix-vector product. |
+
 ## License
 
 MIT — see [LICENSE](LICENSE). Depends on
