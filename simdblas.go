@@ -23,9 +23,17 @@
 //
 // # What is accelerated
 //
-// The routines where whole-slice vector work pays: the Level 1 set, Dgemv and
-// Dgemm, in both precisions. Everything else is inherited from
-// gonum.Implementation and behaves exactly as it did.
+// The routines where whole-slice vector work pays, in both precisions: the
+// Level 1 set, gemv and ger, the symmetric rank-1 and rank-2 updates, and all
+// of Level 3 except the banded and packed variants — gemm, symm, trsm, trmm,
+// syrk and syr2k. Everything else is inherited from gonum.Implementation and
+// behaves exactly as it did.
+//
+// symv and trmv are deliberately absent. The trick that makes symm eighteen
+// times faster — filling the implied half of the matrix in and handing the
+// result to the accelerated multiply — costs n^2 for Level 3, where the
+// multiply is n^3, and costs n^2 for Level 2, where the multiply is also n^2.
+// Measured at 0.11x, so they stay gonum's.
 //
 // Acceleration also requires unit strides and, for the matrix routines, no
 // transpose, alpha of 1, beta of 0 and natural leading dimensions. Anything

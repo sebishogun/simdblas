@@ -64,8 +64,8 @@ beat a gonum implementation that is itself parallel.
 The routines where whole-slice vector work pays, in both precisions:
 
 - **Level 1** — `dot`, `nrm2`, `asum`, `axpy`, `scal`, `swap`, `rot`
-- **Level 2** — `gemv`, `ger`
-- **Level 3** — `gemm`, `trsm`, `trmm`, `syrk`
+- **Level 2** — `gemv`, `ger`, `syr`, `syr2`
+- **Level 3** — `gemm`, `symm`, `trsm`, `trmm`, `syrk`, `syr2k`
 
 Everything else is inherited from `gonum.Implementation` and behaves exactly as
 it did. That is the whole design: `simdblas.Implementation` *embeds* gonum's,
@@ -230,8 +230,23 @@ tall as the matrix, and blocking a 64-wide triangle produces one block and no
 gemm. Below the block size the triangle is filled out into a full matrix and
 handed to gemm whole. That is what took QR from 1.05× to 1.98× at n=256.
 
-Still on gonum's code: `symm`, `syr2k`, the banded and packed storage variants,
-the triangular Level 2 routines, and everything complex.
+### What is left on gonum's code, and why
+
+The **banded and packed storage variants**, and **everything complex**. Neither
+has been attempted; gonum's `mat` rarely produces the first, and the second is a
+larger job than it looks.
+
+**`symv` and `trmv` were written, measured and deleted.** The same densify trick
+that makes `symm` 18× makes them 0.07×. Level 3 does n³ of arithmetic on n² of
+data, so filling in the implied half of a matrix is free next to the multiply.
+Level 2 does n² on n², so the densify is the *same order* as the work it is
+preparing — and it replaces gonum reading n²/2 stored elements with n² of
+branchy copying plus a full matrix-vector multiply. Measured 0.29× at n=192 and
+0.11× at n=1024, so they are not here.
+
+**`trsv` is not attempted.** A triangular solve is sequential — `x[i]` depends
+on `x[0..i-1]` — so it is a scan rather than a map, and Level 2 has no work to
+amortise a blocked algorithm against.
 
 ## Whole workloads
 
