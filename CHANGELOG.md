@@ -1,5 +1,48 @@
 # Changelog
 
+## v1.0.0
+
+**Stable.** The API is one exported type and it is not going to change.
+
+### What 1.0 commits to
+
+`Implementation` stays, and it stays an embedding of `gonum.Implementation`.
+That is the whole surface, and it is what makes the rest of the promise cheap:
+every BLAS interface remains satisfied because gonum's implementation satisfies
+them, and every routine that is not accelerated behaves exactly as gonum's does,
+including the panics.
+
+Anything outside a fast path is delegated — wrong shape, too small, or an
+argument that would make the answer wrong. A call never silently returns
+something a BLAS would not.
+
+### What 1.0 does not commit to
+
+**Which routines are accelerated, or where the thresholds are.** Both are
+measurements, not decisions, and both should move when a better measurement
+exists. A routine may gain a fast path in a minor release; a threshold may move
+in either direction.
+
+**The last unit in the last place, across versions.** Within a version the
+result is deterministic and identical on every architecture — that is inherited
+from simd.go and it is the reason to use this. Across versions, a call may move
+between the accelerated and the delegated path, and those two accumulate
+differently. Pin a version if you diff floating-point output between builds.
+
+**Speed on anything but amd64.** Every number in the README was measured on one
+Zen 5 machine. The thresholds are measured constants, so a different cache or a
+narrower vector unit may well want different ones.
+
+### Accelerated in 1.0
+
+Level 1: `dot`, `nrm2`, `asum`, `axpy`, `scal`, `swap`, `rot`. Level 2: `gemv`,
+`ger`, `syr`, `syr2`. Level 3: `gemm`, `symm`, `trsm`, `trmm`, `syrk`, `syr2k`.
+Both precisions throughout.
+
+Not accelerated, with the reason stated in the README rather than left as a gap:
+the banded and packed storage variants, everything complex, `symv` and `trmv`
+(measured at 0.11x and deleted), and `trsv` (sequential by nature).
+
 ## v0.5.0
 
 **A realistic workload was 27% slower; it is not any more.** Everything before

@@ -41,6 +41,7 @@ func TestReadmeThresholdsMatchConstants(t *testing.T) {
 	want := map[string]int{
 		"dot": minLenDot, "axpy": minLenAxpy, "scal": minLenScal,
 		"swap": minLenSwap, "rot": minLenRot, "asum": minLenAsum, "nrm2": minLenNrm2,
+		"syr": syrMinLen,
 	}
 	for name, v := range want {
 		got, ok := stated[name]

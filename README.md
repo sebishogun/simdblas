@@ -52,6 +52,10 @@ of the two runs — see [measuring](#measuring) before believing any of it.
 | | 1,000,000 | 127 µs | 107 µs | 1.2× |
 | `Daxpy` | 1,000 | 125 ns | 37 ns | 3.4× |
 | | 1,000,000 | 145 µs | 111 µs | 1.3× |
+| `Dsymm` | 512² | — | — | **18.4×** |
+| | 256² | — | — | **16.5×** |
+| `Dsyr2k` | 256² | — | — | **11.8×** |
+| `Dsyr` | 512 | — | — | 3.3× |
 
 Nothing measured is slower than gonum; the narrowest case is 1.18×.
 
@@ -113,8 +117,9 @@ before the thresholds existed:
 
 So each routine has a minimum length, set at the first size that is clearly
 ahead rather than at break-even: **dot 64, axpy 48, scal 48, swap 48, rot 48,
-asum 16, nrm2 8**. `gemm` and `trsm` have work thresholds instead, and `ger`
-has one on row length, for the same reason and measured the same way.
+asum 16, nrm2 8, syr 128**. `gemm` and `trsm` have work thresholds instead,
+`gemm` also a ratio of arithmetic to data movement, and `ger` one on row
+length — same reason, measured the same way.
 
 **The answer would be wrong.** `nrm2` is the only case: BLAS defines it to avoid
 spurious overflow, so when the sum of squares overflows or sinks into the
@@ -255,11 +260,11 @@ are end-to-end, worse of two runs:
 
 | workload | gonum | simdblas | |
 |---|---|---|---|
-| covariance + Cholesky, 5000×300 | 30.1 ms | 7.24 ms | **4.16×** |
-| covariance + Cholesky, 5000×100 | 3.71 ms | 1.76 ms | **2.11×** |
-| dense inference, 128×512×1024 | 3.25 ms | 1.80 ms | **1.81×** |
-| least squares by QR, 5000×200 | 32.1 ms | 22.4 ms | **1.43×** |
-| least squares by QR, 2000×50 | 1.08 ms | 1.08 ms | 1.00× |
+| covariance + Cholesky, 5000×300 | 32.5 ms | 7.34 ms | **4.43×** |
+| covariance + Cholesky, 5000×100 | 4.73 ms | 2.10 ms | **2.25×** |
+| dense inference, 128×512×1024 | 3.36 ms | 1.84 ms | **1.82×** |
+| least squares by QR, 5000×200 | 35.9 ms | 25.2 ms | **1.42×** |
+| least squares by QR, 2000×50 | 1.16 ms | 1.14 ms | 1.02× |
 
 The last row is the useful one. It was **0.73×** until v0.5.0 — no individual
 routine was slow, and the combination was, because applying a QR factor to a
@@ -280,10 +285,23 @@ movement does.
 
 ## Status
 
-Early. The interface is satisfied in full and the accelerated subset is tested
-against gonum, but this has run on amd64 only. Reports from other architectures
-are welcome — simd.go itself is verified on amd64 and arm64 NEON, and under
-emulation everywhere else.
+**v1.0.0.** The API is one exported type and it is stable: `Implementation`
+stays, and stays an embedding of `gonum.Implementation`. Every BLAS interface
+remains satisfied, and every routine that is not accelerated behaves exactly as
+gonum's does, panics included.
+
+What is *not* promised: which routines are accelerated and where the thresholds
+sit — both are measurements and should move when a better one exists — and the
+last unit in the last place across versions, since a call moving between the
+accelerated and delegated path accumulates differently. Within a version the
+result is deterministic and identical on every architecture. See
+[CHANGELOG.md](CHANGELOG.md).
+
+Measured on amd64 only. simd.go underneath is verified on amd64 and arm64 NEON
+and under emulation elsewhere; this package has never been timed anywhere but
+one Zen 5 machine, and the thresholds are measured constants. Reports from other
+architectures are the contribution it most needs — see
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
