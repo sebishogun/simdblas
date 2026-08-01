@@ -63,8 +63,8 @@ beat a gonum implementation that is itself parallel.
 
 The routines where whole-slice vector work pays, in both precisions:
 
-- **Level 1** — `dot`, `nrm2`, `asum`, `axpy`, `scal`
-- **Level 2** — `gemv`
+- **Level 1** — `dot`, `nrm2`, `asum`, `axpy`, `scal`, `swap`, `rot`
+- **Level 2** — `gemv`, `ger`
 - **Level 3** — `gemm`
 
 Everything else is inherited from `gonum.Implementation` and behaves exactly as
@@ -154,6 +154,28 @@ threads and reported `Dgemm` at 512 as 2.27× instead of 4.81×.
 ```
 go test -run '^$' -bench . -count 6 .
 ```
+
+## What this does not accelerate: decompositions
+
+`mat.Mul` is 4.25× faster. `mat.LU`, `mat.Solve`, `mat.Inverse` and `mat.Det`
+are **unchanged**, and that was measured rather than assumed.
+
+LAPACK works on submatrix windows with a scaling factor throughout. Its blocked
+`Dgetrf` calls `Dgemm` with an alpha of −1 and a leading dimension that is the
+parent matrix's width; `Dgetf2` calls `Dger` with a strided column as x; and
+`Dtrsm`, the other half of the blocked step, has no fast path here at all. Every
+guard below rejects those shapes, so a factorisation runs entirely on gonum's
+own code.
+
+That is a real limit rather than a subtlety: the fast paths are shaped for
+application code, where matrices are dense and unscaled, and a decomposition is
+almost the opposite. Fixing it means accepting a leading dimension and a general
+alpha and beta in the `gemm` path, and writing `trsm`. Both are tractable and
+neither is done.
+
+The rank-1 update, rotation and swap kernels added in simd.go v1.2.0 are fast
+on their own — 8.2×, 13.3× and 4.4× over portable Go — and reachable through
+`Dger`, `Drot` and `Dswap` when the arguments are contiguous.
 
 ## Status
 

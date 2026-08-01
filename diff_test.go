@@ -198,3 +198,80 @@ func recovered(f func()) (v any) {
 	f()
 	return nil
 }
+
+// The decomposition routines, against the gonum ones they replace. Same two
+// bars as above: exact where this delegates, tolerance where it does not.
+func TestDecompositionRoutinesMatchGonum(t *testing.T) {
+	r := rand.New(rand.NewPCG(73, 79))
+
+	t.Run("Dswap", func(t *testing.T) {
+		for _, n := range []int{0, 1, 17, 1000} {
+			for _, inc := range []int{1, 2} {
+				x1, y1 := randSlice(r, n*inc+1), randSlice(r, n*inc+1)
+				x2 := append([]float64(nil), x1...)
+				y2 := append([]float64(nil), y1...)
+				simdImpl.Dswap(n, x1, inc, y1, inc)
+				refImpl.Dswap(n, x2, inc, y2, inc)
+				closeSlice(t, "Dswap x", x1, x2, true)
+				closeSlice(t, "Dswap y", y1, y2, true)
+			}
+		}
+	})
+
+	t.Run("Drot", func(t *testing.T) {
+		for _, n := range []int{0, 1, 17, 1000} {
+			for _, inc := range []int{1, 2} {
+				c, s := 0.6, 0.8
+				x1, y1 := randSlice(r, n*inc+1), randSlice(r, n*inc+1)
+				x2 := append([]float64(nil), x1...)
+				y2 := append([]float64(nil), y1...)
+				simdImpl.Drot(n, x1, inc, y1, inc, c, s)
+				refImpl.Drot(n, x2, inc, y2, inc, c, s)
+				// A rotation is elementwise, so this is exact on both paths.
+				closeSlice(t, "Drot x", x1, x2, true)
+				closeSlice(t, "Drot y", y1, y2, true)
+			}
+		}
+	})
+
+	t.Run("Dger", func(t *testing.T) {
+		for _, m := range []int{0, 1, 7, 64} {
+			for _, n := range []int{0, 1, 7, 64} {
+				for _, lda := range []int{n, n + 3} {
+					if lda == 0 {
+						continue
+					}
+					x, y := randSlice(r, m), randSlice(r, n)
+					a1 := randSlice(r, m*lda+1)
+					a2 := append([]float64(nil), a1...)
+					simdImpl.Dger(m, n, 1.5, x, 1, y, 1, a1, lda)
+					refImpl.Dger(m, n, 1.5, x, 1, y, 1, a2, lda)
+					// The kernel hoists the row scale exactly as gonum does, so
+					// even the accelerated path is exact here.
+					closeSlice(t, "Dger", a1, a2, true)
+				}
+			}
+		}
+	})
+}
+
+// As with the rest, the differential test would pass if every guard rejected
+// everything. gerFast is what decides, so it is checked directly.
+func TestGerGuard(t *testing.T) {
+	if !gerFast(4, 5, 5, 1, 1) {
+		t.Error("the contiguous case must be accelerated")
+	}
+	for _, c := range []struct {
+		name string
+		ok   bool
+	}{
+		{"A is a window", gerFast(4, 5, 9, 1, 1)},
+		{"strided x", gerFast(4, 5, 5, 2, 1)},
+		{"strided y", gerFast(4, 5, 5, 1, 2)},
+		{"negative m", gerFast(-1, 5, 5, 1, 1)},
+	} {
+		if c.ok {
+			t.Errorf("%s must be delegated to gonum", c.name)
+		}
+	}
+}
