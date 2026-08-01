@@ -156,7 +156,7 @@ func TestGemmMatchesGonum(t *testing.T) {
 							// general path exists is nearly everything, so
 							// exactness is only required below the
 							// threshold, where this still delegates.
-							accel := int64(m)*int64(n)*int64(k) >= gemmGeneralMinWork &&
+							accel := gemmWorthPacking(tA, blas.NoTrans, m, n, k, lda, n, n, alpha == 1, beta == 0) &&
 								gemmValid(tA, blas.NoTrans, m, n, k, lda, n, n, len(a), len(b), len(c1))
 							closeSlice(t, "Dgemm", c1, c2, !accel)
 						}

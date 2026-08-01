@@ -80,32 +80,93 @@ func packMatrix[T float32 | float64](dst, src []T, rows, cols, ld int, trans boo
 	}
 }
 
-// gemmGeneralMinWork is the multiply-accumulate count below which packing costs
-// more than the wider inner loop wins.
-//
-// Three copies plus a multiply against gonum doing the multiply in place: the
-// copies are linear in the operands and the multiply is cubic, so the threshold
-// is where the cubic term stops being small. Measured, see the README.
+// gemmGeneralMinWork is the multiply-accumulate count below which the packed
+// path is not worth entering at all.
 const gemmGeneralMinWork = 1 << 15
+
+// gemmMinIntensity is the ratio of arithmetic to data movement the packed path
+// needs before it pays.
+//
+// Packing costs O(mk + kn + mn) and the multiply is O(mnk), so the packed path
+// wins by the ratio between them — and that ratio is not implied by the total
+// work. A least-squares fit on a 2000x50 matrix ends up multiplying 2000x50 by
+// 50x1, which is 100,000 multiply-accumulates against 102,050 elements to copy:
+// the packing is more expensive than the arithmetic it is preparing, and the
+// whole workload came out 27% *slower* than gonum with only a size threshold
+// guarding it.
+//
+// Skinny multiplies are exactly the shape a decomposition produces when it
+// applies a factor to one right-hand side, so this is not an edge case.
+const gemmMinIntensity = 8
+
+// gemmIntensity is arithmetic per element copied, counting only the operands
+// that actually need copying.
+func gemmIntensity(m, n, k, copies int) float64 {
+	if copies == 0 {
+		return 1e18 // nothing to pack; the packed path is free
+	}
+	return float64(m) * float64(n) * float64(k) / float64(copies)
+}
 
 // gemmGeneral computes C = alpha*op(A)*op(B) + beta*C through contiguous
 // scratch. It assumes its arguments have already been validated.
+//
+// An operand already in the layout the kernel wants is used where it lies
+// rather than copied. That is the common case for at least one of the three:
+// LAPACK's windows have the wrong leading dimension but its right-hand sides
+// usually do not, and skipping a copy of an m*k operand is worth more than any
+// tuning of the copy itself.
 func gemmGeneral[T float32 | float64](tA, tB blas.Transpose, m, n, k int,
 	alpha T, a []T, lda int, b []T, ldb int, beta T, c []T, ldc int) {
 
 	transA := tA != blas.NoTrans
 	transB := tB != blas.NoTrans
 
-	buf, put := getScratch[T](m*k + k*n + m*n)
-	defer put()
-	pa := buf[:m*k]
-	pb := buf[m*k : m*k+k*n]
-	pc := buf[m*k+k*n:]
+	needA := transA || lda != k
+	needB := transB || ldb != n
+	// C can be written straight through only when the kernel's output layout is
+	// already C's and nothing has to be scaled or accumulated afterwards.
+	needC := ldc != n || alpha != 1 || beta != 0
 
-	packMatrix(pa, a, m, k, lda, transA)
-	packMatrix(pb, b, k, n, ldb, transB)
+	size := 0
+	if needA {
+		size += m * k
+	}
+	if needB {
+		size += k * n
+	}
+	if needC {
+		size += m * n
+	}
 
-	simd.MatMulParallelInto(pc, pa, pb, m, k, n)
+	var buf []T
+	if size > 0 {
+		var put func()
+		buf, put = getScratch[T](size)
+		defer put()
+	}
+
+	pa, pb, pc := a, b, c
+	off := 0
+	if needA {
+		pa = buf[off : off+m*k]
+		off += m * k
+		packMatrix(pa, a, m, k, lda, transA)
+	}
+	if needB {
+		pb = buf[off : off+k*n]
+		off += k * n
+		packMatrix(pb, b, k, n, ldb, transB)
+	}
+	if needC {
+		pc = buf[off : off+m*n]
+	}
+
+	simd.MatMulParallelInto(pc[:m*n], pa[:m*k], pb[:k*n], m, k, n)
+
+	if !needC {
+		return
+	}
 
 	// Scale and accumulate back into C, one row at a time so that ldc is
 	// respected without another copy.
@@ -120,17 +181,34 @@ func gemmGeneral[T float32 | float64](tA, tB blas.Transpose, m, n, k int,
 		case beta == 0 && alpha == 1:
 			copy(row, src)
 		case beta == 0:
-			// row = alpha*src
 			copy(row, src)
 			simd.Scale(row, alpha)
 		case beta == 1:
-			// row += alpha*src
 			simd.AddScaled(row, src, alpha)
 		default:
 			simd.Scale(row, beta)
 			simd.AddScaled(row, src, alpha)
 		}
 	}
+}
+
+// gemmWorthPacking reports whether the packed path beats handing the call to
+// gonum, counting only the operands that would actually be copied.
+func gemmWorthPacking(tA, tB blas.Transpose, m, n, k, lda, ldb, ldc int, alphaIs1, betaIs0 bool) bool {
+	if int64(m)*int64(n)*int64(k) < gemmGeneralMinWork {
+		return false
+	}
+	copies := 0
+	if tA != blas.NoTrans || lda != k {
+		copies += m * k
+	}
+	if tB != blas.NoTrans || ldb != n {
+		copies += k * n
+	}
+	if ldc != n || !alphaIs1 || !betaIs0 {
+		copies += m * n
+	}
+	return gemmIntensity(m, n, k, copies) >= gemmMinIntensity
 }
 
 // gemmValid reports whether the arguments describe a multiplication this

@@ -50,7 +50,7 @@ func (impl Implementation) Dgemm(tA, tB blas.Transpose, m, n, k int, alpha float
 		simd.MatMulParallelInto(c[:m*n], a[:m*k], b[:k*n], m, k, n)
 		return
 	}
-	if int64(m)*int64(n)*int64(k) >= gemmGeneralMinWork &&
+	if gemmWorthPacking(tA, tB, m, n, k, lda, ldb, ldc, alpha == 1, beta == 0) &&
 		gemmValid(tA, tB, m, n, k, lda, ldb, ldc, len(a), len(b), len(c)) {
 		gemmGeneral(tA, tB, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc)
 		return
@@ -64,7 +64,7 @@ func (impl Implementation) Sgemm(tA, tB blas.Transpose, m, n, k int, alpha float
 		simd.MatMulParallelInto(c[:m*n], a[:m*k], b[:k*n], m, k, n)
 		return
 	}
-	if int64(m)*int64(n)*int64(k) >= gemmGeneralMinWork &&
+	if gemmWorthPacking(tA, tB, m, n, k, lda, ldb, ldc, alpha == 1, beta == 0) &&
 		gemmValid(tA, tB, m, n, k, lda, ldb, ldc, len(a), len(b), len(c)) {
 		gemmGeneral(tA, tB, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc)
 		return

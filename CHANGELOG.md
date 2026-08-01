@@ -1,5 +1,35 @@
 # Changelog
 
+## v0.5.0
+
+**A realistic workload was 27% slower; it is not any more.** Everything before
+this was measured routine by routine, and an ordinary least-squares fit on a
+2000x50 matrix came out at 0.73x — no single routine was slow, and the
+combination was.
+
+The cause is that a size threshold is the wrong guard for `gemm`. Packing costs
+O(mk + kn + mn) and the multiply is O(mnk), so the packed path wins by the ratio
+between them, and that ratio is not implied by the total work. Applying a QR
+factor to one right-hand side multiplies 2000x50 by 50x1: 100,000
+multiply-accumulates against 102,050 elements to copy. The packing was more
+expensive than the arithmetic it was preparing, and it passed a threshold that
+only counted mnk.
+
+Two fixes. Operands already in the layout the kernel wants are no longer copied
+at all — LAPACK's windows have the wrong leading dimension but its right-hand
+sides usually do not — and the guard is now on arithmetic per element copied
+rather than on total work.
+
+Measured end to end, worse of two runs:
+
+	least squares  2000x50    0.73x -> 1.00x
+	least squares  5000x200   1.18x -> 1.43x
+	covariance + Cholesky 5000x300   3.84x -> 4.16x
+	inference, 128x512x1024            1.81x
+
+Skipping the redundant copies helped the large cases as much as the guard
+helped the small one.
+
 ## v0.4.0
 
 **Nothing is slower than gonum any more.** Level 1 below roughly 64 elements

@@ -233,6 +233,25 @@ handed to gemm whole. That is what took QR from 1.05× to 1.98× at n=256.
 Still on gonum's code: `symm`, `syr2k`, the banded and packed storage variants,
 the triangular Level 2 routines, and everything complex.
 
+## Whole workloads
+
+Routine-level numbers do not tell you whether a program gets faster, so these
+are end-to-end, worse of two runs:
+
+| workload | gonum | simdblas | |
+|---|---|---|---|
+| covariance + Cholesky, 5000×300 | 30.1 ms | 7.24 ms | **4.16×** |
+| covariance + Cholesky, 5000×100 | 3.71 ms | 1.76 ms | **2.11×** |
+| dense inference, 128×512×1024 | 3.25 ms | 1.80 ms | **1.81×** |
+| least squares by QR, 5000×200 | 32.1 ms | 22.4 ms | **1.43×** |
+| least squares by QR, 2000×50 | 1.08 ms | 1.08 ms | 1.00× |
+
+The last row is the useful one. It was **0.73×** until v0.5.0 — no individual
+routine was slow, and the combination was, because applying a QR factor to a
+single right-hand side produces a multiply whose packing costs more than its
+arithmetic. A size threshold does not catch that; a ratio of arithmetic to data
+movement does.
+
 ## Documentation
 
 - **[docs/guide.md](docs/guide.md)** — installing it, what gets faster and what
