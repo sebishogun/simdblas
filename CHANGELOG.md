@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.0.1
+
+Documentation only. Every number re-measured at a load average under 1, which is
+the first time the machine has been genuinely idle for a full run.
+
+The corrections go both ways and none is large: least squares at 5000x200 was
+understated at 1.42x and is 1.52x; covariance plus Cholesky at 5000x300 was
+overstated at 4.43x and is 4.36x; Dgemm at 512 was 4.8x and is 4.2x. The two
+runs behind each figure now agree to within 2%, which they did not before.
+
+The narrowest case is stated properly: 1.13x for a dot product of 100,000
+elements, where the memory bus is the limit rather than the arithmetic, and
+1.00x for the smallest whole workload.
+
 ## v1.0.0
 
 **Stable.** The API is one exported type and it is not going to change.

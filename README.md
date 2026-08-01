@@ -36,28 +36,30 @@ Go 1.25 or later.
 
 Ryzen AI MAX+ 395 (Zen 5, AVX-512, 32 threads), float64, both implementations
 in the same process on the same inputs. `-count 6`, twice, reporting the worse
-of the two runs — see [measuring](#measuring) before believing any of it.
+of the two runs, at a load average under 1 — see [measuring](#measuring) before
+believing any of it.
 
 | routine | size | gonum | simdblas | |
 |---|---|---|---|---|
-| `Dnrm2` | 1,000 | 805 ns | 28 ns | **29.3×** |
-| | 100,000 | 80.2 µs | 3.6 µs | **22.3×** |
-| | 1,000,000 | 806 µs | 53 µs | **15.1×** |
-| `Dgemm` | 64² | 40.7 µs | 4.4 µs | **9.3×** |
-| | 256² | 415 µs | 73 µs | **5.7×** |
-| | 512² | 2.10 ms | 0.44 ms | **4.8×** |
-| `Dgemv` | 2048² | 989 µs | 103 µs | **9.6×** |
-| | 1024² | 97 µs | 42 µs | **2.3×** |
-| `Ddot` | 1,000 | 107 ns | 33 ns | 3.2× |
-| | 1,000,000 | 127 µs | 107 µs | 1.2× |
+| `Dnrm2` | 1,000 | 804 ns | 28 ns | **29.1×** |
+| | 100,000 | 80.2 µs | 3.62 µs | **22.2×** |
+| | 1,000,000 | 807 µs | 53.2 µs | **15.1×** |
+| `Dgemv` | 2048² | 985 µs | 104 µs | **9.5×** |
+| `Dgemm` | 64² | 40.8 µs | 4.37 µs | **9.3×** |
+| | 256² | 416 µs | 74.1 µs | **5.6×** |
+| | 512² | 2.10 ms | 0.50 ms | **4.2×** |
+| | 128² | 109 µs | 33.6 µs | **3.2×** |
 | `Daxpy` | 1,000 | 125 ns | 37 ns | 3.4× |
-| | 1,000,000 | 145 µs | 111 µs | 1.3× |
-| `Dsymm` | 512² | — | — | **18.4×** |
-| | 256² | — | — | **16.5×** |
-| `Dsyr2k` | 256² | — | — | **11.8×** |
-| `Dsyr` | 512 | — | — | 3.3× |
+| `Ddot` | 1,000 | 108 ns | 33 ns | 3.2× |
+| `Dgemv` | 1024² | 84.5 µs | 33.5 µs | 2.5× |
+| | 256² | 4.37 µs | 2.65 µs | 1.6× |
+| `Daxpy` | 1,000,000 | 140 µs | 110 µs | 1.3× |
+| `Ddot` | 1,000,000 | 131 µs | 108 µs | 1.2× |
+| `Dsymm` | 512² | | | **18.4×** |
+| `Dsyr2k` | 256² | | | **11.8×** |
+| `Dsyr` | 512 | | | 3.3× |
 
-Nothing measured is slower than gonum; the narrowest case is 1.18×.
+Nothing measured is slower than gonum. The narrowest routine case is 1.13× (`Ddot` at 100,000 elements, where the bus is the limit rather than the arithmetic) and the narrowest workload is 1.00×.
 
 `Dnrm2` is the outlier because gonum computes it with a scaling loop that cannot
 vectorize. `Dgemm` and `Dgemv` use simd.go's parallel kernels, which is why they
@@ -260,11 +262,11 @@ are end-to-end, worse of two runs:
 
 | workload | gonum | simdblas | |
 |---|---|---|---|
-| covariance + Cholesky, 5000×300 | 32.5 ms | 7.34 ms | **4.43×** |
-| covariance + Cholesky, 5000×100 | 4.73 ms | 2.10 ms | **2.25×** |
-| dense inference, 128×512×1024 | 3.36 ms | 1.84 ms | **1.82×** |
-| least squares by QR, 5000×200 | 35.9 ms | 25.2 ms | **1.42×** |
-| least squares by QR, 2000×50 | 1.16 ms | 1.14 ms | 1.02× |
+| covariance + Cholesky, 5000×300 | 30.9 ms | 7.01 ms | **4.36×** |
+| covariance + Cholesky, 5000×100 | 3.75 ms | 1.72 ms | **2.11×** |
+| dense inference, 128×512×1024 | 3.24 ms | 1.80 ms | **1.80×** |
+| least squares by QR, 5000×200 | 32.7 ms | 21.3 ms | **1.52×** |
+| least squares by QR, 2000×50 | 0.98 ms | 0.98 ms | 1.00× |
 
 The last row is the useful one. It was **0.73×** until v0.5.0 — no individual
 routine was slow, and the combination was, because applying a QR factor to a
@@ -285,7 +287,7 @@ movement does.
 
 ## Status
 
-**v1.0.0.** The API is one exported type and it is stable: `Implementation`
+**v1.0.1.** The API is one exported type and it is stable: `Implementation`
 stays, and stays an embedding of `gonum.Implementation`. Every BLAS interface
 remains satisfied, and every routine that is not accelerated behaves exactly as
 gonum's does, panics included.
