@@ -205,7 +205,8 @@ The numbers above are from one machine and they are the only numbers here.
 Benchmark noise is one-sided, so the minimum of several runs is what gets used
 rather than the mean, and the machine has to be quiet. An earlier draft of that
 table was measured while a docker cross-compilation lane was using all 32
-threads and reported `Dgemm` at 512 as 2.27× instead of 4.81×.
+threads and reported `Dgemm` at 512 as 2.27× instead of the idle 4.81×;
+re-measured for v1.0.1, the quiet value is 4.2×.
 
 ```
 go test -run '^$' -bench . -count 6 .
@@ -214,7 +215,7 @@ go test -run '^$' -bench . -count 6 .
 ## Decompositions
 
 `mat.LU`, `mat.QR`, `mat.Cholesky` and `mat.Inverse` all run faster. Same
-method as the table above — worse of two runs, minimum of four counts:
+method as the table above — worse of two runs, minimum of six counts:
 
 | | gonum | simdblas | |
 |---|---|---|---|

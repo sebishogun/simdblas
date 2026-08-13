@@ -1,7 +1,8 @@
 # Roadmap
 
 Future work only, staged, with measurable exit criteria. **Nothing on this page
-is shipped.** The shipped surface is the README and the two LLDs
+is shipped.** The shipped surface is the README, the [guide](guide.md) and the
+two LLDs
 ([delegation-and-guards](lld/delegation-and-guards.md),
 [level-2-and-level-3](lld/level-2-and-level-3.md)); the current release state
 is in the README's Status section and CHANGELOG.md.

@@ -49,7 +49,8 @@ compares two builds. `-count 6` or more, take the minimum rather than the mean,
 and run the comparison twice — benchmark noise is one-sided, so the fastest run
 is the one least interfered with. A number from a busy machine is worse than no
 number: an earlier draft of the README's table was measured against a container
-using every core and reported 4.81× as 2.27×.
+using every core and reported 4.81× as 2.27×; re-measured for v1.0.1, the
+quiet value is 4.2×.
 
 ## Reporting a run on another architecture
 

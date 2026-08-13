@@ -28,15 +28,15 @@ The guard is `unit` (one vector: `incX == 1 && n >= 0 && len(x) >= n`) or
 `unit2` (both vectors: `incX == 1 && incY == 1 && n >= 0` and both lengths),
 plus a minimum length per routine (level1.go:41-49, 51-59):
 
-| routine | minimum length | kernel |
-|---|---|---|
-| `dot` | 64 | `simd.Dot` |
-| `nrm2` | 8 | `simd.SumSquares` + `math.Sqrt` (see below) |
-| `asum` | 16 | `simd.L1Norm` |
-| `axpy` | 48 | `simd.AddScaled` |
-| `scal` | 48 | `simd.Scale` |
-| `swap` | 48 | `simd.Swap` |
-| `rot` | 48 | `simd.Rotate` |
+| routine | minimum length | constant | kernel |
+|---|---|---|---|
+| `dot` | 64 | `minLenDot` | `simd.Dot` |
+| `nrm2` | 8 | `minLenNrm2` | `simd.SumSquares` + `math.Sqrt` (see below) |
+| `asum` | 16 | `minLenAsum` | `simd.L1Norm` |
+| `axpy` | 48 | `minLenAxpy` | `simd.AddScaled` |
+| `scal` | 48 | `minLenScal` | `simd.Scale` |
+| `swap` | 48 | `minLenSwap` | `simd.Swap` |
+| `rot` | 48 | `minLenRot` | `simd.Rotate` |
 
 Every minimum is set at the first size that is clearly ahead of gonum rather
 than at break-even, because gonum's Level 1 is hand-written SSE2 and beats a
@@ -52,8 +52,9 @@ is negative — the guard doubles as the validity check.
 BLAS defines `nrm2` to avoid spurious overflow and underflow; the obvious
 implementation does not. The fast path runs and its own failure is detected:
 if the sum of squares is `+Inf` (overflow) or below the smallest normal value
-(`0x1p-1022` for float64, `0x1p-126` for float32 — the point where the mantissa
-is already being eaten), the call goes to gonum's scaled algorithm
+(`minNormalF64` = 0x1p-1022 for float64, `minNormalF32` = 0x1p-126 for
+float32, level1.go:131-132 — the point where the mantissa is already being
+eaten), the call goes to gonum's scaled algorithm
 (level1.go:93-133). The subnormal case is the easy one to get wrong: a vector
 of 1e-160s squares to 1e-320, which is not zero, so a zero test passes it
 through with six digits gone. Checking magnitudes up front instead was measured
@@ -69,7 +70,8 @@ at 483 µs against 54 µs for a million elements and rejected — see
 
 - `gerFast` — `incX == 1 && incY == 1 && lda == n` — the single-call kernel
   `simd.RankOneInto`.
-- otherwise, if `n >= gerRowMinLen` (256), the per-row path `gerRows`: a rank-1
+- otherwise, if `n >= gerRowMinLen` (256, level1_blas.go:110), the per-row
+  path `gerRows`: a rank-1
   update is `m` independent axpys, and `simd.AddScaled` takes each row as its
   own contiguous slice, so any `lda` and any `incX` work. This is the shape an
   LU actually passes: a strided column as `x` and a trailing submatrix as the
@@ -109,12 +111,12 @@ paths win by the ratio of arithmetic to data movement, not by total work
 | routine | guard | shipped path |
 |---|---|---|
 | `gemm` direct | `gemmFast`: `NoTrans`, `NoTrans`, `alpha == 1`, `beta == 0`, `lda == k`, `ldb == n`, `ldc == n`, non-negative dims, slice lengths | `simd.MatMulParallelInto` in place |
-| `gemm` general | `gemmWorthPacking` (work `>= 1<<15` and intensity `>= 8`) **and** `gemmValid` | `gemmGeneral`: pack transposed/windowed/scaled operands into pooled scratch, multiply, scale and accumulate |
-| `trsm` | valid side/uplo/transpose/diag, `lda >= nt`, `ldb >= n`, lengths, work `>= 1<<15` **and** `nt > trsmBlock` (64) | blocked: gonum solves the diagonal blocks, accelerated gemm does the updates |
-| `trmm` | same validity set, work `>= 1<<15` | blocked; dense path (`trmmDense`) when `nt <= 64` |
-| `symm` | `symmOK`: valid side/uplo, `lda >= na`, lengths, work `>= 1<<15` | densify the stored triangle, `gemmGeneral` |
-| `syrk` | valid uplo/transpose, lengths, work `>= 2*(1<<15)` | full product via `gemmGeneral`, fold the requested triangle back |
-| `syr2k` | same, work `>= 2*(1<<15)` | two `gemmGeneral` products into scratch, `foldTriangle` |
+| `gemm` general | `gemmWorthPacking` (work `>= gemmGeneralMinWork` = 1<<15, gemm.go:85, and intensity `>= gemmMinIntensity` = 8, gemm.go:100) **and** `gemmValid` | `gemmGeneral`: pack transposed/windowed/scaled operands into pooled scratch, multiply, scale and accumulate |
+| `trsm` | valid side/uplo/transpose/diag, `lda >= nt`, `ldb >= n`, lengths, work `>= trsmMinWork` (1<<15, trsm.go:31) **and** `nt > trsmBlock` (64, trsm.go:27) | blocked: gonum solves the diagonal blocks, accelerated gemm does the updates |
+| `trmm` | same validity set, work `>= trsmMinWork` (1<<15 — the trsm constant, reused at trmm.go:45) | blocked; dense path (`trmmDense`) when `nt <= 64` |
+| `symm` | `symmOK`: valid side/uplo, `lda >= na`, lengths, work `>= gemmGeneralMinWork` (1<<15, symmetric.go:116) | densify the stored triangle, `gemmGeneral` |
+| `syrk` | valid uplo/transpose, lengths, work `>= 2*gemmGeneralMinWork` (computed inline, trmm.go:209) | full product via `gemmGeneral`, fold the requested triangle back |
+| `syr2k` | same, work `>= 2*gemmGeneralMinWork` (computed inline, symmetric.go:173) | two `gemmGeneral` products into scratch, `foldTriangle` |
 
 `ConjTrans` is accepted wherever `Trans` is; for the real types it is treated
 as a transpose (`tA != blas.NoTrans`). The validity predicates are shared with

@@ -102,6 +102,13 @@ axpy 48, scal 48, swap 48, rot 48, asum 16, nrm2 8. Below it the call is
 delegated, which costs one extra method call — 0.4 to 0.7 ns, measured — and
 that is now the floor on how much slower this can be for any call.
 
+These pre-fix ratios are the v0.4.0-era record, measured before the
+idle-machine re-measurement. The current table is in the README ("When it
+hands the call back to gonum"), measured for v1.0.1 at a load average under 1;
+where the two disagree — `dot` at n=4 here versus n=8 in the README, `axpy`
+0.68× versus 0.72× at n=16 — the README table is the current value, and the
+v1.0.1 corrections are also recorded in docs/wrong.md.
+
 Also in this release: runnable examples for every entry point, a guide, and
 this file.
 

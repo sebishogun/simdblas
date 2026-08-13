@@ -50,6 +50,13 @@ they did not before (commit a4346ea, CHANGELOG v1.0.1):
 | `Dgemm` 512 | 4.8× | 4.2× |
 | `Dgemv` 1024 | 2.3× | 2.5× |
 
+**Supersession:** the `Dgemm` 512 row above — corrected to 4.2× — supersedes
+the 4.81× quiet-machine value cited in the busy-machine entry. The busy-machine
+entry stays as evidence of what load does to a measurement: its 2.27× run
+happened under loads up to 29 and was invalidated for that reason, not because
+the quiet value changed. The current quiet value for `Dgemm` at 512 is 4.2×,
+as in the v1.0.1 README.
+
 ## 2026-08-01 — serial `gemv` kernel measured 0.90× and was replaced
 
 `Dgemv` with simd.go's serial kernel measured **0.90×** against gonum at

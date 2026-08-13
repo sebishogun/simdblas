@@ -23,6 +23,7 @@
 - **Bench rule:** `go test -run '^$' -bench . -count 6 .` on a quiet machine (load average under 1), minima compared, interleaved in one session; below the 8.3% floor judge on `perf stat -e instructions:u,cycles:u` and the disassembly.
 - **Gates are run bare** — never `go test ./... | tail` without `set -o pipefail`; the pipe launders failures into green exits.
 - **A losing evaluation commits two things:** the deleted prototype and a docs/wrong.md entry with the measurement and its provenance.
+- **Release discipline:** any routine or behavior that ships as a result of these evaluations needs its own minor release (for example v1.1.0), separate from the dependency/docs patch release in Task 1.
 - Commit after each task; commit messages match the repo style (lowercase `feat:`/`docs:`/`test:` prefixes).
 
 ---
@@ -74,7 +75,7 @@ Expected: tag exists; `git describe` shows it.
 **Source:** trmm.go:188-196 — the shipped syrk computes the whole product and keeps half; the code says a blocked form "would be better and is not written".
 
 **Files:**
-- Create: `syrk.go` (the prototype; if it ships, move `Dsyrk`/`Ssyrk` bodies out of trmm.go/level3_f32.go — or keep them if the prototype loses and they are deleted)
+- Create: `syrk.go` (the prototype; if it ships, move the `Dsyrk`/`Ssyrk` bodies out of trmm.go/level3_f32.go into it; if it loses, delete the prototype and the shipped full-product paths stay exactly as they are)
 - Create: `syrk_test.go` (differential + triangle-invariant tests)
 - Modify: `bench_test.go` (add `BenchmarkDsyrk`, mirroring `BenchmarkDgemm`: sizes 64/128/256/512, `k == n`, simd and gonum sub-benchmarks in one process)
 
@@ -130,7 +131,7 @@ Expected: a baseline; record it in the task notes before touching guards.
 
 **Step 2: Write the failing guard tests**
 
-Add cases to `TestGuards` asserting the candidate predicate accelerates the new shapes (currently `gemmFast` returns false for them — the new tests fail on the not-yet-existing predicate).
+Add cases to `TestGuards` asserting the candidate predicate accelerates the new shapes (currently `gemmFast` returns false for them — the new tests fail at compile time on the not-yet-existing predicate).
 
 **Step 3: Prototype**
 
@@ -184,7 +185,7 @@ Write differential tests for `Zdot`/`Zaxpy` (blas.Complex128, two bars, NaN-awar
 
 `TestDtrsvCandidateMatchesGonum` over unit and non-unit `incX`, upper/lower, sizes 8..1024, calling a not-yet-existing `impl.trsvFast(...)`.
 Run: `go test -run TestDtrsvCandidateMatchesGonum .`
-Expected: FAIL — undefined.
+Expected: compile failure — `impl.trsvFast` undefined.
 
 **Step 2: Prototype the best available candidate**
 
@@ -200,7 +201,29 @@ Expected: loses. Delete the prototype, record the measurement in `docs/wrong.md`
 
 ---
 
-### Task 6: Evaluate blocked transpose packing
+### Task 6: Evaluate banded and packed storage variants
+
+**Source:** README — the banded and packed variants "have not been attempted; gonum's `mat` rarely produces the first". This is a bounded evaluation: measure first, prototype only if a concrete API/workload pair and a meaningful opportunity exist. No shipped API is invented here.
+
+**Files:** none certain; `level23.go`/`diff_test.go` only if a prototype is justified by the measurement.
+
+**Step 1: Establish whether real workloads route through the banded/packed APIs**
+
+Instrument or trace gonum `mat`/`stat`/LAPACK paths (LU, QR, Cholesky, Inverse, Solve at representative sizes) and count calls into the banded/packed BLAS entry points (e.g. `Dgbmv`, `Dtbmv`, `Dtbsv`, `Dsbmv`, `Dspmv`, `Dtpmv`, `Dtpsv`). Identify a representative incumbent — a concrete API and workload pair — if one exists.
+Run: `go test -run . ./...` with the counting wrapper.
+Expected: either a concrete incumbent or an empty result.
+
+**Step 2a: No incumbent — record and defer**
+
+Add a `docs/wrong.md` entry (the measurement: gonum's `mat` does not route banded/packed operations through BLAS in the exercised workloads), mark roadmap E4 closed/deferred with the evidence, commit `docs: record banded/packed feasibility finding`. Task ends here — no prototype.
+
+**Step 2b: Incumbent exists and the opportunity is meaningful — prototype**
+
+Write the failing differential tests first (both bars, delegated shapes included), run to verify they fail, prototype the candidate routine behind the guard shape, disassemble, then measure with the five-gate production bar. Keep (tests + docs, commit `feat: accelerate <routine>`) or delete and record in `docs/wrong.md` (commit `docs: record banded/packed measurement`).
+
+---
+
+### Task 7: Evaluate blocked transpose packing
 
 **Source:** gemm.go:72-75 — packing a transposed operand walks down a column (cache-hostile); the code says blocking "has not been measured as mattering against the multiply that follows — worth revisiting if a profile ever says otherwise".
 
@@ -223,7 +246,7 @@ Block the transpose copy (destination-row blocks read contiguous source columns)
 
 ---
 
-### Task 7: Cross-architecture measurement programme (arm64 NEON first)
+### Task 8: Cross-architecture measurement programme (arm64 NEON first)
 
 **Source:** README Status + CONTRIBUTING — amd64-only measurements; arm64 NEON has real-hardware correctness coverage in simd v1.20.0; "reports from other architectures are the contribution it most needs".
 
@@ -270,7 +293,8 @@ Expected: `go test ./...` still green — the docs test re-verifies prose agains
 | 3 | widen gemm/gemv direct paths | delete prototype, record in wrong.md |
 | 4 | complex feasibility | record feasibility finding in wrong.md, stop |
 | 5 | trsv | record measurement in wrong.md, close roadmap item |
-| 6 | blocked transpose packing | record profile finding in wrong.md |
-| 7 | arm64 NEON measurements | report lands; thresholds move only with measurements |
+| 6 | banded/packed variants | record feasibility finding in wrong.md, defer roadmap E4 |
+| 7 | blocked transpose packing | record profile finding in wrong.md |
+| 8 | arm64 NEON measurements | report lands; thresholds move only with measurements |
 
 After every task: `go test ./... && go test -race ./... && go vet ./... && git diff --check` bare, then commit. When all tasks are done and the branch is green, finish per superpowers:finishing-a-development-branch.

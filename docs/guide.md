@@ -103,7 +103,8 @@ the whole comparison twice. Benchmark noise is one-sided — interference only
 ever makes a run slower — so the fastest run is the one least interfered with,
 and a mean is mostly a measure of how busy the machine was. An earlier draft of
 this project's own numbers was measured while a container was using every core
-and reported a 4.81× as 2.27×.
+and reported a 4.81× as 2.27×; re-measured for v1.0.1, the quiet value is
+4.2×.
 
 ## Numerical differences
 
