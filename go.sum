@@ -1,5 +1,5 @@
-github.com/sebishogun/simd v1.2.0 h1:8CneoxwW8mVHqTM7YHqdHBmMbEXepiRttEGjG6UIMC0=
-github.com/sebishogun/simd v1.2.0/go.mod h1:c1C/Sh8PZowv0Tn/BaBVmeI87W1Gh9SYrwqpLVUW7tI=
+github.com/sebishogun/simd v1.20.0 h1:klVEUvBL0mO/MrL1PNfCwYhLMtB1V197NpOHRRdPKlM=
+github.com/sebishogun/simd v1.20.0/go.mod h1:c1C/Sh8PZowv0Tn/BaBVmeI87W1Gh9SYrwqpLVUW7tI=
 golang.org/x/sys v0.47.0 h1:o7XGOvZQCADBQQ4Y7VNq2dRWQR7JmOUW8Kxx4ZsNgWs=
 golang.org/x/sys v0.47.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
 gonum.org/v1/gonum v0.17.0 h1:VbpOemQlsSMrYmn7T2OUvQ4dqxQXU+ouZFQsZOx50z4=
