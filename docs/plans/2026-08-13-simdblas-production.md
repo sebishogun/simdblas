@@ -36,10 +36,12 @@
 **Step 1: Establish the diff**
 
 Run: `git diff v1.0.1..HEAD --stat`
-Expected: three commits between the tag and the branch head — the
-`simd v1.2.0 -> v1.20.0` dependency bump, the README family-table link-update
-commit, and the docs commit. The important conclusion to retain: no routine
-implementation changed, so the diff is dependency and documentation only.
+Expected: the range contains the `simd v1.2.0 -> v1.20.0` dependency bump plus
+documentation commits — including the README family-table link update, the
+guide refresh and the production-architecture docs — and nothing else; the
+commit count grows as review commits accumulate and is not fixed. The
+important conclusion to retain: no routine implementation changed, so the
+diff is dependency and documentation only.
 
 **Step 2: Choose the version**
 
