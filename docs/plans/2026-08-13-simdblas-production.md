@@ -36,7 +36,10 @@
 **Step 1: Establish the diff**
 
 Run: `git diff v1.0.1..HEAD --stat`
-Expected: the diff is the `simd v1.2.0 -> v1.20.0` dependency bump and the docs commit; no routine changes.
+Expected: three commits between the tag and the branch head — the
+`simd v1.2.0 -> v1.20.0` dependency bump, the README family-table link-update
+commit, and the docs commit. The important conclusion to retain: no routine
+implementation changed, so the diff is dependency and documentation only.
 
 **Step 2: Choose the version**
 

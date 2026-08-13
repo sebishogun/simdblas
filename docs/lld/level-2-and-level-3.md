@@ -37,9 +37,10 @@ is no packed `gemv`.
   update as `m` independent axpys, one `simd.AddScaled` per row. This covers
   the shapes LAPACK actually passes — a strided column as `x` and a trailing
   submatrix window — so an LU is not stuck on the delegated path. The row scale
-  is computed once and the product rounds before the add, matching the kernel
-  and gonum, so this path returns the same bits as the single-call path
-  (level1_blas.go:112-131).
+  is computed once and the product rounds before the add, both matching what
+  the kernel and gonum do, so this path returns the same bits as the other two
+  — the single-call accelerated path and gonum's own (level1_blas.go:112-131;
+  the differential test asserts exact equality even on the accelerated paths).
 
 ### `syr` and `syr2`
 

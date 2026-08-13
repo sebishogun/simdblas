@@ -82,8 +82,11 @@ messages to keep in sync.
   v1.0.0).
 - **Which routines are accelerated and where the thresholds sit are
   measurements, not promises**, and both may move in a minor release. The
-  current values are recorded in the LLDs and machine-checked against the
-  constants where a test exists.
+  current values are recorded in the LLDs. Only the Level 1 minima and `syr`
+  stated in the README are machine-checked against the constants
+  (`TestReadmeThresholdsMatchConstants` parses README.md, not the LLDs); the
+  LLD values for `ger`, gemm work/intensity, the trsm block size and the
+  syrk/syr2k guards are checked against the source by hand, not by a test.
 - **No performance claims off amd64.** Everything in the README was measured on
   one Zen 5 machine; the thresholds are measured constants (README Status).
 

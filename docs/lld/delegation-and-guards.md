@@ -124,7 +124,7 @@ that is not one of the three — delegates and gonum panics as usual.
 The general gemm path counts only the operands that would actually be copied
 (`gemmIntensity`): an operand already in the kernel's layout is used where it
 lies rather than copied, and the copy count is what the intensity ratio divides
-by (gemm.go:102-118, CHANGELOG v0.5.0).
+by (gemm.go:102-109, CHANGELOG v0.5.0).
 
 ## Scratch and allocation ownership
 

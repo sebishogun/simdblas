@@ -67,8 +67,12 @@ works, so:
 - `TestReadmeThresholdsMatchConstants` parses the README's bold threshold list
   and compares it against the constants in level1.go — the facts written in
   prose are machine-gated against the code so they cannot drift.
-- `TestDocLinksResolve` checks every local link in README.md, CONTRIBUTING.md,
-  docs/guide.md and CHANGELOG.md points at a file that exists.
+- `TestDocLinksResolve` checks every local link in its explicit document list
+  — README.md, CONTRIBUTING.md, docs/guide.md and CHANGELOG.md — points at a
+  file that exists. Links inside docs/architecture.md, the LLDs, the roadmap
+  and the plans are not covered by the test and must be checked by hand; a
+  Markdown-only change that adds or moves a document should verify them
+  manually before committing.
 - `TestPackageDocNamesTheEntryPoint` keeps the package doc naming
   `blas64.Use` and `Implementation`.
 - `TestSatisfiesBLAS` fails the build if the embedding ever stops satisfying
