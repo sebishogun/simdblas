@@ -286,9 +286,30 @@ movement does.
 
 ## Documentation
 
+The shipped surface — what is accelerated, and the promises around it — is
+this README, the [guide](docs/guide.md) and the two low-level design docs.
+Anything labelled planned or evaluated is not shipped.
+
 - **[docs/guide.md](docs/guide.md)** — installing it, what gets faster and what
   does not, how to measure it on your own machine, and what to do when
   something looks wrong.
+- **[docs/architecture.md](docs/architecture.md)** — the package boundary, the
+  embedding, registration, and the compatibility and numerical promises.
+- **[docs/lld/delegation-and-guards.md](docs/lld/delegation-and-guards.md)** —
+  every accelerated routine, its guard and its threshold, sourced from the
+  code.
+- **[docs/lld/level-2-and-level-3.md](docs/lld/level-2-and-level-3.md)** — how
+  the `gemv`/`gemm`/`ger`/`trsm`/`trmm`/`symm`/`syrk`/`syr2k` paths are built.
+- **[docs/verification.md](docs/verification.md)** — the gates, and what
+  counts as a number on this project.
+- **[docs/roadmap.md](docs/roadmap.md)** — what is being evaluated next, with
+  exit criteria. Nothing there is shipped.
+- **[docs/wrong.md](docs/wrong.md)** — measurements that argued against
+  changes, kept as append-only decision evidence.
+- **[docs/plans/2026-08-13-simdblas-production-design.md](docs/plans/2026-08-13-simdblas-production-design.md)**
+  — the production design record, and
+  **[docs/plans/2026-08-13-simdblas-production.md](docs/plans/2026-08-13-simdblas-production.md)**
+  — the implementation plan for future work.
 - **[Runnable examples](https://pkg.go.dev/github.com/sebishogun/simdblas#pkg-examples)**
   — every entry point, compiled and checked by `go test`.
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — the bar for a change, and how to add
