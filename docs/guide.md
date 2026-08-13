@@ -37,7 +37,7 @@ unit busy, which in practice means the matrix routines.
 
 ```go
 var c mat.Dense
-c.Mul(a, b)          // 4.25x at 512x512
+c.Mul(a, b)          // 4.2x at 512x512
 ```
 
 Matrix multiplication is the best case because it does O(n³) work on O(n²) data,
@@ -61,8 +61,11 @@ vector unit reaches.
 
 ## What does not get faster
 
-`symm`, `syr2k`, the banded and packed storage variants, the triangular Level 2
-routines, and everything complex. Those run gonum's code unchanged.
+The banded and packed storage variants, triangular Level 2 routines, `symv`,
+`trmv`, and everything complex run gonum's code unchanged. `symm` is accelerated
+at sizes where densifying its stored triangle pays for the multiply that
+follows. `syr2k`, like `syrk`, computes a full product and folds the requested
+output triangle back.
 
 Small problems also do not, and that is deliberate rather than an oversight.
 Below a measured threshold each routine hands the call to gonum, whose Level 1

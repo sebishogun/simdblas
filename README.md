@@ -30,11 +30,16 @@ func init() {
 }
 ```
 
-Go 1.25 or later.
+`blas32` and `blas64` are separate process-wide backends. Register both if the
+application uses both precisions, and let the application own registration;
+reusable libraries should not change a caller's global BLAS implementation.
+
+Requires Go 1.25 or later and `github.com/sebishogun/simd v1.20.0`.
 
 ## Numbers
 
-Ryzen AI MAX+ 395 (Zen 5, AVX-512, 32 threads), float64, both implementations
+These are the v1.0.1 release measurements: Ryzen AI MAX+ 395 (Zen 5, AVX-512,
+32 threads), float64, both implementations
 in the same process on the same inputs. `-count 6`, twice, reporting the worse
 of the two runs, at a load average under 1 — see [measuring](#measuring) before
 believing any of it.
@@ -59,7 +64,12 @@ believing any of it.
 | `Dsyr2k` | 256² | | | **11.8×** |
 | `Dsyr` | 512 | | | 3.3× |
 
-Nothing measured is slower than gonum. The narrowest routine case is 1.13× (`Ddot` at 100,000 elements, where the bus is the limit rather than the arithmetic) and the narrowest workload is 1.00×.
+No v1.0.1 release row was slower than gonum. The narrowest routine case was
+1.13× (`Ddot` at 100,000 elements, where the bus is the limit rather than the
+arithmetic) and the narrowest workload was 1.00×. The committed benchmark
+harness covers `Ddot`, `Daxpy`, `Dnrm2`, `Dgemm` and `Dgemv`; the symmetric,
+decomposition and whole-workload rows in this README are release-time
+measurements, not continuous benchmark gates.
 
 `Dnrm2` is the outlier because gonum computes it with a scaling loop that cannot
 vectorize. `Dgemm` and `Dgemv` use simd.go's parallel kernels, which is why they
@@ -73,33 +83,31 @@ The routines where whole-slice vector work pays, in both precisions:
 - **Level 2** — `gemv`, `ger`, `syr`, `syr2`
 - **Level 3** — `gemm`, `symm`, `trsm`, `trmm`, `syrk`, `syr2k`
 
-Everything else is inherited from `gonum.Implementation` and behaves exactly as
-it did. That is the whole design: `simdblas.Implementation` *embeds* gonum's,
-so every one of the 60-odd BLAS routines exists and is correct from the first
-line, and each accelerated one is an override of a working method rather than a
-new one that has to be got right.
+Everything else is inherited from `gonum.Implementation`. That is the design:
+`simdblas.Implementation` embeds gonum's implementation, so every BLAS method
+exists before an accelerated override is selected. Delegated calls are gonum's
+own implementation, including its invalid-argument panics. Accelerated calls
+are tested against gonum within numerical tolerances and may differ in the last
+bits.
 
-Acceleration additionally requires **unit strides**, and for the matrix routines
-**no transpose, alpha of 1, beta of 0 and natural leading dimensions**. Anything
-else — including invalid arguments — falls through to gonum, so the answer is
-always a correct BLAS answer and never a wrong fast one, and the panics your
-code relies on come from gonum and read exactly as they always have.
-
-That fast-path condition is narrow on purpose for a first release. It is the
-shape `mat.Mul` produces for dense matrices that are not views, which is the
-common call. Widening it is worth doing against measurements rather than in
-advance.
+The direct matrix-kernel path requires **no transpose, alpha of 1, beta of 0 and
+natural leading dimensions**. That is not the full accelerated surface. Larger
+`gemm` calls outside that shape can pack transposed, scaled or windowed operands
+into pooled contiguous scratch. `trsm`, `trmm`, `syrk`, `symm` and `syr2k` use
+blocked or densified paths when their work thresholds are met. Level 1 and
+`gemv` retain the narrower unit-stride and contiguous guards.
 
 ## When it hands the call back to gonum
 
-This is the part that decides whether swapping the backend can ever make your
-program slower. Three things route a call to gonum's own implementation, and
-between them they are meant to cover every case where this is not ahead.
+This is the part that decides whether swapping the backend can make a workload
+slower. Three things route a call to gonum's own implementation.
 
-**The shape is wrong for the fast path.** Non-unit strides, and for the matrix
-routines a transpose, an alpha other than 1 or a beta other than 0 outside the
-general path. Invalid arguments go the same way, so the panics your code relies
-on come from gonum and read exactly as they always have.
+**The call is outside an accelerated path.** Level 1 requires unit strides;
+`gemv` also requires a contiguous, untransposed matrix with alpha 1 and beta 0.
+General `gemm` accepts transposes, scaling and matrix windows only when there is
+enough arithmetic to repay packing. The blocked Level 3 routines have their own
+shape and work guards. Unsupported routines and invalid arguments delegate, so
+gonum retains their behavior and panic messages.
 
 **The problem is too small.** The kernels have their own threshold — under a
 few dozen elements they run a plain Go loop, because crossing into assembly
@@ -147,11 +155,11 @@ simdblas     0x...de71   both
 ```
 
 **Gonum's answer depends on what it was compiled for.** It has no arm64
-assembly, so the same program gives different results on x86 and on arm64. This
-implementation gives the same bits on every architecture and every instruction
-set, because the accumulation order is fixed rather than following the vector
-width. If you need a result that reproduces across machines, that is the reason
-to use this.
+assembly, so the same program can give different results on x86 and arm64. The
+accelerated reductions here use a fixed accumulation order rather than one that
+follows vector width. This repository tests determinism in the selected tier;
+cross-tier and cross-architecture kernel agreement is supplied by `simd
+v1.20.0`.
 
 ## One place the specification bites
 
@@ -188,6 +196,7 @@ its guards are tested directly instead.
 ```
 go test ./...
 go test -race ./...
+go vet ./...
 ```
 
 ## Measuring
@@ -244,8 +253,8 @@ has been attempted; gonum's `mat` rarely produces the first, and the second is a
 larger job than it looks.
 
 **`symv` and `trmv` were written, measured and deleted.** The same densify trick
-that makes `symm` 18× makes them 0.07×. Level 3 does n³ of arithmetic on n² of
-data, so filling in the implied half of a matrix is free next to the multiply.
+that makes `symm` 18× loses on these Level 2 calls. Level 3 does n³ of arithmetic
+on n² of data, so filling in the implied half of a matrix is free next to the multiply.
 Level 2 does n² on n², so the densify is the *same order* as the work it is
 preparing — and it replaces gonum reading n²/2 stored elements with n² of
 branchy copying plus a full matrix-vector multiply. Measured 0.29× at n=192 and
@@ -257,16 +266,17 @@ amortise a blocked algorithm against.
 
 ## Whole workloads
 
-Routine-level numbers do not tell you whether a program gets faster, so these
-are end-to-end, worse of two runs:
+Routine-level numbers do not tell you whether a program gets faster. These are
+the end-to-end ratios recorded for the v1.0.1 release; the absolute times from
+an earlier run are omitted rather than mixed with the later ratios.
 
-| workload | gonum | simdblas | |
-|---|---|---|---|
-| covariance + Cholesky, 5000×300 | 30.9 ms | 7.01 ms | **4.36×** |
-| covariance + Cholesky, 5000×100 | 3.75 ms | 1.72 ms | **2.11×** |
-| dense inference, 128×512×1024 | 3.24 ms | 1.80 ms | **1.80×** |
-| least squares by QR, 5000×200 | 32.7 ms | 21.3 ms | **1.52×** |
-| least squares by QR, 2000×50 | 0.98 ms | 0.98 ms | 1.00× |
+| workload | simdblas / gonum speed |
+|---|---:|
+| covariance + Cholesky, 5000×300 | **4.36×** |
+| covariance + Cholesky, 5000×100 | **2.11×** |
+| dense inference, 128×512×1024 | **1.80×** |
+| least squares by QR, 5000×200 | **1.52×** |
+| least squares by QR, 2000×50 | 1.00× |
 
 The last row is the useful one. It was **0.73×** until v0.5.0 — no individual
 routine was slow, and the combination was, because applying a QR factor to a
@@ -287,10 +297,11 @@ movement does.
 
 ## Status
 
-**v1.0.1.** The API is one exported type and it is stable: `Implementation`
-stays, and stays an embedding of `gonum.Implementation`. Every BLAS interface
-remains satisfied, and every routine that is not accelerated behaves exactly as
-gonum's does, panics included.
+The latest tagged and published release is **v1.0.1**. The current main branch
+uses `simd v1.20.0`; that dependency update is not yet tagged as a simdblas
+release. The API is one exported type and is stable: `Implementation` stays an
+embedding of `gonum.Implementation`. Every BLAS interface remains satisfied,
+and delegated routines remain gonum's own methods, panics included.
 
 What is *not* promised: which routines are accelerated and where the thresholds
 sit — both are measurements and should move when a better one exists — and the
@@ -299,25 +310,21 @@ accelerated and delegated path accumulates differently. Within a version the
 result is deterministic and identical on every architecture. See
 [CHANGELOG.md](CHANGELOG.md).
 
-Measured on amd64 only. simd.go underneath is verified on amd64 and arm64 NEON
-and under emulation elsewhere; this package has never been timed anywhere but
-one Zen 5 machine, and the thresholds are measured constants. Reports from other
-architectures are the contribution it most needs — see
+Measured on amd64 only. The `simd v1.20.0` dependency has real-hardware
+correctness coverage on amd64 and arm64 NEON and emulated correctness coverage
+for its other targets; that does not establish simdblas performance there. This
+package has only been timed on the Zen 5 machine above, and the thresholds are
+measured constants. Reports from other architectures are the contribution it
+most needs — see
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
 
 ## The rest of the family
 
-All built on [simd.go](https://github.com/sebishogun/simd), which generates its
-kernels once from C and ships them as committed assembly for nine instruction
-sets — so none of these needs cgo, and none is amd64-only.
-
-| | |
-|---|---|
-| [**simd.go**](https://github.com/sebishogun/simd) | 463 operations over slices, bytes and text. The kernels everything else is built from. |
-| [**simdjson**](https://github.com/sebishogun/simdjson) | Structural-index JSON parsing. Faster than minio/simdjson-go, and not amd64-only. |
-| [**simdcsv**](https://github.com/sebishogun/simdcsv) | CSV reading on one vector scan per record. |
-| [**simdvec**](https://github.com/sebishogun/simdvec) | Embedding search whose whole index scan is one matrix-vector product. |
+The maintained inventory of libraries built on `simd` is in the
+[`simd` README](https://github.com/sebishogun/simd#built-on-this). Platform,
+performance and release status stay with each repository instead of being
+copied here.
 
 ## License
 
