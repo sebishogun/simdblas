@@ -275,7 +275,22 @@ Expected: table rows where the arm64 result is outside noise of the amd64 claim 
 
 **Step 3: Decide per threshold**
 
-For each threshold where the crossover measurement on arm64 differs from the amd64 constant by more than the 8.3% floor: move the constant, update its comment with the arm64 measurement, update the README if the number is stated there.
+The 8.3% figure is the family's wall-clock decision bar and noise floor **per
+build** — layout noise is per-build, not per-run — and it is not proof that
+cross-machine deltas are directly comparable. amd64 and arm64 are different
+builds on different machines, so the floor says nothing about how arm64's
+numbers relate to amd64's. Do not use the 8.3% figure on instruction counts
+at all: it is a wall-clock bar, and instruction/cycle counts are compared
+directly. Each architecture needs its own evidence, taken on that machine
+under the verification rules — disassembly, `perf stat -e
+instructions:u,cycles:u`, and representative wall-clock runs judged against
+that machine's own layout noise — before any threshold decision.
+
+For each threshold where the arm64 crossover measurement differs from the
+amd64 constant: move the constant only on the arm64 machine's own evidence,
+update its comment with the arm64 measurement, and update the README if the
+number is stated there; otherwise keep the constant and record why in the
+report.
 Expected: `go test ./...` still green — the docs test re-verifies prose against the moved constants.
 
 **Step 4: Write the report and commit**

@@ -89,6 +89,13 @@ time and committed as assembly.
 - **Production bar:** gonum differential correctness, fast-path engagement,
   no regression for guarded shapes, disassembly, performance outside the 8.3%
   floor.
+- **Release gate.** A release ships only from a state where the full current
+  gate set is green (`go test ./...`, `go test -race ./...`, `go vet ./...`),
+  the differential/fast-path/conformance and architecture/benchmark evidence
+  required by docs/verification.md is recorded, and the status, tag, CHANGELOG
+  and docs agree with the diff being released. Roadmap work is not shipped:
+  nothing from docs/roadmap.md or docs/plans/ lands in a release until it has
+  passed the production bar above.
 - **wrong.md policy.** Measurements that argue against a change belong in
   `docs/wrong.md`, append-only, whether or not any code changed; never invent
   a measurement; never edit or delete an old entry — add a new one.

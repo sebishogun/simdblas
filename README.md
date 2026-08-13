@@ -317,6 +317,9 @@ Anything labelled planned or evaluated is not shipped.
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — the bar for a change, and how to add
   an accelerated routine.
 - **[CHANGELOG.md](CHANGELOG.md)**.
+- **[AGENTS.md](AGENTS.md)** and **[CLAUDE.md](CLAUDE.md)** — the working
+  contract for agents: required reading, the rules and the release gate. They
+  govern the repository, not the shipped API.
 
 ## Status
 
