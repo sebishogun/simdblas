@@ -103,3 +103,59 @@ func BenchmarkDgemv(b *testing.B) {
 }
 
 var sinkF float64
+
+// benchVecC is benchVec for complex vectors. A complex128 is sixteen bytes,
+// which is what SetBytes has to report or the MB/s column compares a complex
+// routine against a real one at half its true rate.
+func benchVecC(b *testing.B, n int, f func(x, y []complex128)) {
+	r := rand.New(rand.NewPCG(1, 2))
+	x, y := make([]complex128, n), make([]complex128, n)
+	for i := range x {
+		x[i] = complex(r.NormFloat64(), r.NormFloat64())
+		y[i] = complex(r.NormFloat64(), r.NormFloat64())
+	}
+	b.SetBytes(int64(n * 16))
+	b.ResetTimer()
+	for b.Loop() {
+		f(x, y)
+	}
+}
+
+// The three complex Level 1 shapes simd has a kernel for. Sizes match the
+// real Level 1 benchmarks so the two tables read together, plus 100 and 64 --
+// the guard threshold and just above it, which is where a wrong threshold
+// shows up as a regression rather than as a missing win.
+func BenchmarkZdotu(b *testing.B) {
+	for _, n := range []int{64, 100, 1000, 100000, 1000000} {
+		b.Run(fmt.Sprintf("n=%d/simd", n), func(b *testing.B) {
+			benchVecC(b, n, func(x, y []complex128) { sinkC = simdImpl.Zdotu(n, x, 1, y, 1) })
+		})
+		b.Run(fmt.Sprintf("n=%d/gonum", n), func(b *testing.B) {
+			benchVecC(b, n, func(x, y []complex128) { sinkC = refImpl.Zdotu(n, x, 1, y, 1) })
+		})
+	}
+}
+
+func BenchmarkZdotc(b *testing.B) {
+	for _, n := range []int{64, 100, 1000, 100000, 1000000} {
+		b.Run(fmt.Sprintf("n=%d/simd", n), func(b *testing.B) {
+			benchVecC(b, n, func(x, y []complex128) { sinkC = simdImpl.Zdotc(n, x, 1, y, 1) })
+		})
+		b.Run(fmt.Sprintf("n=%d/gonum", n), func(b *testing.B) {
+			benchVecC(b, n, func(x, y []complex128) { sinkC = refImpl.Zdotc(n, x, 1, y, 1) })
+		})
+	}
+}
+
+func BenchmarkZdscal(b *testing.B) {
+	for _, n := range []int{48, 64, 1000, 100000, 1000000} {
+		b.Run(fmt.Sprintf("n=%d/simd", n), func(b *testing.B) {
+			benchVecC(b, n, func(x, y []complex128) { simdImpl.Zdscal(n, 1.5, x, 1) })
+		})
+		b.Run(fmt.Sprintf("n=%d/gonum", n), func(b *testing.B) {
+			benchVecC(b, n, func(x, y []complex128) { refImpl.Zdscal(n, 1.5, x, 1) })
+		})
+	}
+}
+
+var sinkC complex128
